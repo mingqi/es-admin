@@ -1,0 +1,44 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'elasticsearch'
+
+def all_index client
+  client.indices.stats['indices'].keys.select {|v|
+    v =~ /uclogs-\d{8}/
+  }
+end
+
+options = {
+  :es => ["localhost:7200"],
+  :day => 7
+}
+
+optparse = OptionParser.new do |opts|
+  opts.banner = "purge-index [options]"
+
+  opts.on("-v", "--[no-]verbose", "Run verbosely") do |v|
+    options[:verbose] = v
+  end
+
+  opts.on('--es [ES]', Array, :REQUIRED, 'ES end-point') do |v|
+    options[:es] = v
+  end
+
+  opts.on('--day [day]', Integer, 'days to purge') do |v|
+    options[:day] = v
+  end
+end
+
+optparse.parse!
+client = Elasticsearch::Client.new log: false, hosts: options[:es]
+
+
+for index in all_index client
+  t = Date.strptime index[7..-1], '%Y%m%d'
+  if Date.today - t > options[:day]
+    result = client.indices.delete index: index 
+    puts "successfully deleted #{index}"
+  end
+end
+
